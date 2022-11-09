@@ -90,12 +90,12 @@ function draw() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
     /* Set the values of the projection transformation */
-    let projection = m4.perspective(Math.PI/3, 1, 1, 1000); 
+    let projection = m4.perspective(Math.PI/2.3, 1, 1, 1000); 
     
     /* Get the view matrix from the SimpleRotator object.*/
     let modelView = spaceball.getViewMatrix();
 
-    let rotateToPointZero = m4.axisRotation([1,0,0], 1);
+    let rotateToPointZero = m4.axisRotation([0.7,-0.5,0], 1);
     let translateToPointZero = m4.translation(0,2,-10);
 
     let matAccum0 = m4.multiply(rotateToPointZero, modelView );
@@ -116,16 +116,53 @@ function draw() {
 function CreateSurfaceData()
 {
     let vertexList = [];
-    let t = -2;
 
-    for(let alpha = 0; alpha<= 4*Math.PI; alpha+=0.05) {
-        for(t=-2; t<=2; t+=0.05) {
-            vertexList.push(x(alpha,t), y(alpha,t), z(t))
+    const vertical = verticalCoords(); 
+    const horizontal = horizontalCoords(vertical);
+
+    let temp = vertical;
+    for(let k=0; k<=2; k++) {
+        
+        for (let i = 0; i < temp.length; i++) {
+            for (let j = 0; j < temp[0].length; j++) {
+                vertexList.push(temp[i][j]);
+            } 
         }
-        t = -2;
+        temp = horizontal;
     }
 
     return vertexList;
+}
+
+const verticalCoords = () => {
+    let coords = [];
+
+    let t = -2;
+
+    for(let alpha = 0; alpha<= 3*Math.PI; alpha+=0.1) {
+        let coords_temp = [];
+        for(t=-2; t<=2; t+=0.1) {
+            coords_temp.push(x(alpha,t), y(alpha,t), z(t));
+        }
+        coords.push(coords_temp);
+        t = -2;
+    }
+
+    return coords;
+}
+
+const horizontalCoords = (vertical) => {
+    let coords = [];
+
+    for(let i = 0; i<vertical[0].length; i+=3) {
+        let coords_temp = []
+        for(let j = 0; j < vertical.length; j++) {
+            coords_temp.push(vertical[j][i], vertical[j][i+1], vertical[j][i+2])
+        }
+        coords.push(coords_temp);
+    }
+
+    return coords;
 }
 
 
