@@ -8,29 +8,29 @@ let InputCounter = 0.0;
 let angle = 0.0;
 
 const scale = 8;
-const teta0 = Math.PI/5;
+const teta0 = Math.PI/2;
 const alpha0 = 0;
 const r = 1;
-const c = 1;
-const d = 5;
+const c = 2;
+const d = 1;
 
-const x = (alpha, t,param =15) => {
+function x (alpha, t,param =15) {
   return (( r * Math.cos(alpha) -
     (r * (alpha0 - alpha) +
       t * Math.cos(teta0) -
       c * Math.sin(d * t) * Math.sin(teta0)) *
       Math.sin(alpha))/param)*scale;
-};
+}
 
-const y = (alpha, t, param =15) => {
+function y (alpha, t, param =15) {
   return (( r * Math.sin(alpha) +
     (r * (alpha0 - alpha) +
       t * Math.cos(teta0) -
       c * Math.sin(d * t) * Math.sin(teta0)) *
       Math.cos(alpha))/param)*scale;
-};
+}
 
-const z = (t, height = 15) => {
+function z (t, height = 15) {
   return ((t*Math.sin(teta0)+c*Math.sin(d*t)*Math.cos(teta0))/(-height))*scale;
 }
 
@@ -46,7 +46,6 @@ function Model(name) {
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
-       
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer)
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STREAM_DRAW);
 
@@ -76,10 +75,16 @@ function ShaderProgram(name, program) {
 
     // Location of the attribute variable in the shader program.
     this.iAttribVertex = -1;
+    this.iNormalVertex = -1;
     // Location of the uniform specifying a color for the primitive.
     this.iColor = -1;
     // Location of the uniform matrix representing the combined transformation.
     this.iModelViewProjectionMatrix = -1;
+    this.iWorldMatrix = -1;
+    this.iWorldInverseTranspose = -1;
+    this.iLightWorldPosition = -1;
+    this.iLightDirection = -1;
+    this.iViewWorldPosition = -1;
 
     this.Use = function() {
         gl.useProgram(this.prog);
@@ -95,26 +100,36 @@ function draw() {
     gl.clearColor(0,0,0,1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    
     /* Set the values of the projection transformation */
-    let projection = m4.perspective(Math.PI/2.3, 1, 1, 1000); 
+    let projection = m4.orthographic(-20, 20, -20, 20, -20, 20);
     
     /* Get the view matrix from the SimpleRotator object.*/
     let modelView = spaceball.getViewMatrix();
 
-    let rotateToPointZero = m4.axisRotation([0.7,-0.5,0], 1);
-    let translateToPointZero = m4.translation(0,2,-10);
 
-    let matAccum0 = m4.multiply(rotateToPointZero, modelView );
-    let matAccum1 = m4.multiply(translateToPointZero, matAccum0 );
-        
-    /* Multiply the projection matrix times the modelview matrix to give the
-       combined transformation matrix, and send that to the shader program. */
+    let WorldMatrix = m4.translation(0, 0, -15);
+
+
+    let matAccum1 = m4.multiply(WorldMatrix, modelView );
     let modelViewProjection = m4.multiply(projection, matAccum1 );
 
-    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection );
+    var worldInverseMatrix = m4.inverse(matAccum1);
+    var worldInverseTransposeMatrix = m4.transpose(worldInverseMatrix);
+
+    gl.uniform3fv(shProgram.iViewWorldPosition, [0, 0, 0]);
+
+    gl.uniform3fv(shProgram.iLightWorldPosition, GetCircleLightPoint());
+    gl.uniform3fv(shProgram.iLightDirection, [0, 0, 0]);
+   
     
-    /* Draw the six faces of a cube, with different colors. */
-    gl.uniform4fv(shProgram.iColor, [1,1,0,1] );
+    gl.uniformMatrix4fv(shProgram.iWorldInverseTranspose, false, worldInverseTransposeMatrix);
+    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection );
+    gl.uniformMatrix4fv(shProgram.iWorldMatrix, false, matAccum1 );
+    
+    gl.uniform4fv(shProgram.iColor, [0.5,0.9,0.2,1] );
 
     surface.Draw();
 }
@@ -172,8 +187,14 @@ function initGL() {
     shProgram.Use();
 
     shProgram.iAttribVertex              = gl.getAttribLocation(prog, "vertex");
+    shProgram.iNormalVertex              = gl.getAttribLocation(prog, "normal");
     shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(prog, "ModelViewProjectionMatrix");
     shProgram.iColor                     = gl.getUniformLocation(prog, "color");
+    shProgram.iWorldInverseTranspose     = gl.getUniformLocation(prog, "WorldInverseTranspose");
+    shProgram.iWorldMatrix               = gl.getUniformLocation(prog, "WorldMatrix");
+    shProgram.iLightWorldPosition        = gl.getUniformLocation(prog, "LightWorldPosition");
+    shProgram.iLightDirection            = gl.getUniformLocation(prog, "LightDirection");
+    shProgram.iViewWorldPosition         = gl.getUniformLocation(prog, "ViewWorldPosition");
 
     surface = new Model('Surface');
     let data = CreateSurfaceData();
@@ -241,5 +262,41 @@ function init() {
 
     spaceball = new TrackballRotator(canvas, draw, 0);
 
+    draw();
+}
+
+function GetCircleLightPoint()
+{
+    let radius = 10;
+    angle = degriesToRadians(InputCounter);
+    console.debug(angle);
+    let x = radius * Math.cos(angle );
+    let y = radius * Math.sin(angle );
+    let z = 0;
+    return [x,y,z];
+}
+
+window.addEventListener("keydown", function (event) {  
+    switch (event.key) {
+      case "ArrowLeft":
+        ProcessArrowLeftDown();
+        break;
+      case "ArrowRight":
+        ProcessArrowRightDown();
+        break;
+      default:
+        return; 
+    }
+});
+
+function ProcessArrowLeftDown()
+{
+    InputCounter -= 3;
+    draw();
+}
+
+function ProcessArrowRightDown()
+{
+    InputCounter += 3;
     draw();
 }
