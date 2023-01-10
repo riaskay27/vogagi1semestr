@@ -108,7 +108,7 @@ function draw() {
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection );
     gl.uniformMatrix4fv(shProgram.iWorldMatrix, false, matAccum1 );
     
-    gl.uniform4fv(shProgram.iColor, [0.5,0.9,0.2,1] );
+    gl.uniform4fv(shProgram.iColor, [0.5,0.2,0.7,1] );
 
     surface.Draw();
 }
