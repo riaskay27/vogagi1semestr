@@ -8,32 +8,11 @@ let InputCounter = 0.0;
 let angle = 0.0;
 
 const scale = 8;
-const teta0 = Math.PI/2;
-const alpha0 = 0;
+const teta = Math.PI/2;
+const a0 = 0;
 const r = 1;
 const c = 2;
 const d = 1;
-
-function x (alpha, t,param =15) {
-  return (( r * Math.cos(alpha) -
-    (r * (alpha0 - alpha) +
-      t * Math.cos(teta0) -
-      c * Math.sin(d * t) * Math.sin(teta0)) *
-      Math.sin(alpha))/param)*scale;
-}
-
-function y (alpha, t, param =15) {
-  return (( r * Math.sin(alpha) +
-    (r * (alpha0 - alpha) +
-      t * Math.cos(teta0) -
-      c * Math.sin(d * t) * Math.sin(teta0)) *
-      Math.cos(alpha))/param)*scale;
-}
-
-function z (t, height = 15) {
-  return ((t*Math.sin(teta0)+c*Math.sin(d*t)*Math.cos(teta0))/(-height))*scale;
-}
-
 
 // Constructor
 function Model(name) {
@@ -134,8 +113,19 @@ function draw() {
     surface.Draw();
 }
 
-function CreateSurfaceData()
-{
+
+
+function getX (t,a, param = 15) {
+    return ((r * Math.cos(a) - (r * (a0 - a) + t * Math.cos(teta) - c * Math.sin(d * t) * Math.sin(teta)) * Math.sin(a)) / param) * scale;
+}
+function getY (t,a, param = 15) {
+    return ((r * Math.sin(a) + (r * (a0 - a) + t * Math.cos(teta) - c * Math.sin(d * t) * Math.sin(teta)) * Math.cos(a)) / param) * scale;
+}
+function getZ (t, height = 15) {
+    return ((t * Math.sin(teta) + c * Math.sin(d * t) * Math.cos(teta)) / (-height)) * scale;
+}
+
+function CreateSurfaceData() {
     let vertexList = [];
     let normalsList = [];
 
@@ -147,8 +137,8 @@ function CreateSurfaceData()
     for (let t = -15; t <= 15; t += step) {
         for (let a = 0; a <= 15; a += step) {
             const tNext = t + step;
-            vertexList.push(x(t, a, 10), y(t, a, 10), z(t, 20));
-            vertexList.push(x(tNext, a, 10), y(tNext, a, 10), z(tNext, 20));
+            vertexList.push(getX(t, a, 10), getY(t, a, 10), getZ(t, 20));
+            vertexList.push(getX(tNext, a, 10), getY(tNext, a, 10), getZ(tNext, 20));
 
             let result = m4.cross(calcDerT(t, a, deltaT), calcDerA(t, a, deltaA));
             normalsList.push(result[0], result[1], result[2])
@@ -163,16 +153,17 @@ function CreateSurfaceData()
 }
 
 const calcDerT = (t, a, tDelta) => ([
-    (x(t + tDelta, a, 10) - x(t, a, 10)) / degriesToRadians(tDelta),
-    (y(t + tDelta, a, 10) - y(t, a, 10)) / degriesToRadians(tDelta),
-    (z(t + tDelta, a) - z(t, a)) / degriesToRadians(tDelta),
+    (getX(t + tDelta, a, 10) - getX(t, a, 10)) / degriesToRadians(tDelta),
+    (getY(t + tDelta, a, 10) - getY(t, a, 10)) / degriesToRadians(tDelta),
+    (getZ(t + tDelta, a) - getZ(t, a)) / degriesToRadians(tDelta),
 ])
 
 const calcDerA = (t, a, aDelta) => ([
-    (x(t, a + aDelta, 10) - x(t, a, 10)) / degriesToRadians(aDelta),
-    (y(t, a + aDelta, 10) - y(t, a, 10)) / degriesToRadians(aDelta),
-    (z(t, a + aDelta) - z(t, a)) / degriesToRadians(aDelta),
+    (getX(t, a + aDelta, 10) - getX(t, a, 10)) / degriesToRadians(aDelta),
+    (getY(t, a + aDelta, 10) - getY(t, a, 10)) / degriesToRadians(aDelta),
+    (getZ(t, a + aDelta) - getZ(t, a)) / degriesToRadians(aDelta),
 ])
+
 
 function degriesToRadians(angle) {
     return angle * Math.PI / 180;
@@ -198,6 +189,7 @@ function initGL() {
 
     surface = new Model('Surface');
     let data = CreateSurfaceData();
+    console.log(data[0].length)
     surface.BufferData(data[0], data[1]);
 }
 
