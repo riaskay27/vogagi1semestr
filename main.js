@@ -4,36 +4,34 @@ let gl;                         // The webgl context.
 let surface;                    // A surface model
 let shProgram;                  // A shader program
 let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
+let InputCounter = 0.0;
+let angle = 0.0;
 
-
+const scale = 8;
 const teta0 = Math.PI/5;
 const alpha0 = 0;
 const r = 1;
 const c = 1;
 const d = 5;
 
-const x = (alpha, t) => {
-  return (
-    r * Math.cos(alpha) -
+const x = (alpha, t,param =15) => {
+  return (( r * Math.cos(alpha) -
     (r * (alpha0 - alpha) +
       t * Math.cos(teta0) -
       c * Math.sin(d * t) * Math.sin(teta0)) *
-      Math.sin(alpha)
-  );
+      Math.sin(alpha))/param)*scale;
 };
 
-const y = (alpha, t) => {
-  return (
-    r * Math.sin(alpha) +
+const y = (alpha, t, param =15) => {
+  return (( r * Math.sin(alpha) +
     (r * (alpha0 - alpha) +
       t * Math.cos(teta0) -
       c * Math.sin(d * t) * Math.sin(teta0)) *
-      Math.cos(alpha)
-  );
+      Math.cos(alpha))/param)*scale;
 };
 
-const z = (t) => {
-  return t*Math.sin(teta0)+c*Math.sin(d*t)*Math.cos(teta0);
+const z = (t, height = 15) => {
+  return ((t*Math.sin(teta0)+c*Math.sin(d*t)*Math.cos(teta0))/(-height))*scale;
 }
 
 
@@ -41,12 +39,16 @@ const z = (t) => {
 function Model(name) {
     this.name = name;
     this.iVertexBuffer = gl.createBuffer();
+    this.iNormalBuffer = gl.createBuffer();
     this.count = 0;
 
-    this.BufferData = function(vertices) {
+    this.BufferData = function(vertices, normals) {
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
+       
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer)
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STREAM_DRAW);
 
         this.count = vertices.length/3;
     }
@@ -57,7 +59,11 @@ function Model(name) {
         gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(shProgram.iAttribVertex);
    
-        gl.drawArrays(gl.LINE_STRIP, 0, this.count);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
+        gl.vertexAttribPointer(shProgram.iNormalVertex, 3, gl.FLOAT, true, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iNormalVertex);
+
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.count);
     }
 }
 
@@ -116,53 +122,45 @@ function draw() {
 function CreateSurfaceData()
 {
     let vertexList = [];
+    let normalsList = [];
 
-    const vertical = verticalCoords(); 
-    const horizontal = horizontalCoords(vertical);
+    let deltaT = 0.0005;
+    let deltaA = 0.0005;
 
-    let temp = vertical;
-    for(let k=0; k<=2; k++) {
-        
-        for (let i = 0; i < temp.length; i++) {
-            for (let j = 0; j < temp[0].length; j++) {
-                vertexList.push(temp[i][j]);
-            } 
+    const step = 0.5
+
+    for (let t = -15; t <= 15; t += step) {
+        for (let a = 0; a <= 15; a += step) {
+            const tNext = t + step;
+            vertexList.push(x(t, a, 10), y(t, a, 10), z(t, 20));
+            vertexList.push(x(tNext, a, 10), y(tNext, a, 10), z(tNext, 20));
+
+            let result = m4.cross(calcDerT(t, a, deltaT), calcDerA(t, a, deltaA));
+            normalsList.push(result[0], result[1], result[2])
+
+            result = m4.cross(calcDerT(tNext, a, deltaT), calcDerA(tNext, a, deltaA));
+            normalsList.push(result[0], result[1], result[2]);
         }
-        temp = horizontal;
     }
 
-    return vertexList;
+
+    return [vertexList, normalsList];
 }
 
-const verticalCoords = () => {
-    let coords = [];
+const calcDerT = (t, a, tDelta) => ([
+    (x(t + tDelta, a, 10) - x(t, a, 10)) / degriesToRadians(tDelta),
+    (y(t + tDelta, a, 10) - y(t, a, 10)) / degriesToRadians(tDelta),
+    (z(t + tDelta, a) - z(t, a)) / degriesToRadians(tDelta),
+])
 
-    let t = -2;
+const calcDerA = (t, a, aDelta) => ([
+    (x(t, a + aDelta, 10) - x(t, a, 10)) / degriesToRadians(aDelta),
+    (y(t, a + aDelta, 10) - y(t, a, 10)) / degriesToRadians(aDelta),
+    (z(t, a + aDelta) - z(t, a)) / degriesToRadians(aDelta),
+])
 
-    for(let alpha = 0; alpha<= 3*Math.PI; alpha+=0.1) {
-        let coords_temp = [];
-        for(t=-2; t<=2; t+=0.1) {
-            coords_temp.push(x(alpha,t), y(alpha,t), z(t));
-        }
-        coords.push(coords_temp);
-        t = -2;
-    }
-
-    return coords;
-}
-
-const horizontalCoords = (vertical) => {
-    let coords = [];
-
-    for(let i = 0; i<vertical[0].length; i+=3) {
-        let coords_temp = []
-        for(let j = 0; j < vertical.length; j++) {
-            coords_temp.push(vertical[j][i], vertical[j][i+1], vertical[j][i+2])
-        }
-        coords.push(coords_temp);
-    }
-
-    return coords;
+function degriesToRadians(angle) {
+    return angle * Math.PI / 180;
 }
 
 
@@ -178,9 +176,8 @@ function initGL() {
     shProgram.iColor                     = gl.getUniformLocation(prog, "color");
 
     surface = new Model('Surface');
-    surface.BufferData(CreateSurfaceData());
-
-    gl.enable(gl.DEPTH_TEST);
+    let data = CreateSurfaceData();
+    surface.BufferData(data[0], data[1]);
 }
 
 
