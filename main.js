@@ -6,6 +6,7 @@ let shProgram;                  // A shader program
 let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
 let InputCounter = 0.0;
 let angle = 0.0;
+let point = {x:0,y:0};
 
 const scale = 8;
 const teta = Math.PI/2;
@@ -19,16 +20,18 @@ function Model(name) {
     this.name = name;
     this.iVertexBuffer = gl.createBuffer();
     this.iNormalBuffer = gl.createBuffer();
+    this.iTextureBuffer = gl.createBuffer();
     this.count = 0;
 
-    this.BufferData = function(vertices, normals) {
+    this.BufferData = function({vertexList, normalsList, textureList}) {
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexList), gl.STREAM_DRAW);
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer)
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STREAM_DRAW);
-
-        this.count = vertices.length/3;
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalsList), gl.STREAM_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer)
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureList), gl.STREAM_DRAW);
+        this.count = vertexList.length/3;
     }
 
     this.Draw = function() {
@@ -40,6 +43,10 @@ function Model(name) {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
         gl.vertexAttribPointer(shProgram.iNormalVertex, 3, gl.FLOAT, true, 0, 0);
         gl.enableVertexAttribArray(shProgram.iNormalVertex);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTextureBuffer);
+        gl.vertexAttribPointer(shProgram.iTexture, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iTexture);
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.count);
     }
@@ -55,6 +62,7 @@ function ShaderProgram(name, program) {
     // Location of the attribute variable in the shader program.
     this.iAttribVertex = -1;
     this.iNormalVertex = -1;
+    this.iTexture = -1;
     // Location of the uniform specifying a color for the primitive.
     this.iColor = -1;
     // Location of the uniform matrix representing the combined transformation.
@@ -64,6 +72,9 @@ function ShaderProgram(name, program) {
     this.iLightWorldPosition = -1;
     this.iLightDirection = -1;
     this.iViewWorldPosition = -1;
+    this.iUText    = -1;
+    this.iAngle = -1;
+    this.iPoint = -1;
 
     this.Use = function() {
         gl.useProgram(this.prog);
@@ -76,6 +87,7 @@ function ShaderProgram(name, program) {
  * way to draw with WebGL.  Here, the geometry is so simple that it doesn't matter.)
  */
 function draw() { 
+
     gl.clearColor(0,0,0,1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
@@ -97,7 +109,7 @@ function draw() {
 
     var worldInverseMatrix = m4.inverse(matAccum1);
     var worldInverseTransposeMatrix = m4.transpose(worldInverseMatrix);
-
+    const angle = document.getElementById('rotAngle').value;
     gl.uniform3fv(shProgram.iViewWorldPosition, [0, 0, 0]);
 
     gl.uniform3fv(shProgram.iLightWorldPosition, GetCircleLightPoint());
@@ -109,6 +121,9 @@ function draw() {
     gl.uniformMatrix4fv(shProgram.iWorldMatrix, false, matAccum1 );
     
     gl.uniform4fv(shProgram.iColor, [0.5,0.2,0.7,1] );
+    gl.uniform1f(shProgram.iAngle, degriesToRadians(+angle));
+    gl.uniform2fv(shProgram.iPoint, [getX(point.x, point.y), getY(point.x, point.y)]);
+    gl.uniform1i(shProgram.iUText, 0);
 
     surface.Draw();
 }
@@ -128,11 +143,12 @@ function getZ (t, height = 15) {
 function CreateSurfaceData() {
     let vertexList = [];
     let normalsList = [];
+    let textureList = [];
 
     let deltaT = 0.0005;
     let deltaA = 0.0005;
 
-    const step = 0.5
+    const step = 0.1
 
     for (let t = -15; t <= 15; t += step) {
         for (let a = 0; a <= 15; a += step) {
@@ -145,11 +161,15 @@ function CreateSurfaceData() {
 
             result = m4.cross(calcDerT(tNext, a, deltaT), calcDerA(tNext, a, deltaA));
             normalsList.push(result[0], result[1], result[2]);
+
+            
+            textureList.push(...[(t + 15) / 30, a / 15]);
+            textureList.push(...[(tNext + 15) / 30,( a+step) / 15]);
         }
     }
 
 
-    return [vertexList, normalsList];
+    return {vertexList, normalsList, textureList};
 }
 
 const calcDerT = (t, a, tDelta) => ([
@@ -186,11 +206,23 @@ function initGL() {
     shProgram.iLightWorldPosition        = gl.getUniformLocation(prog, "LightWorldPosition");
     shProgram.iLightDirection            = gl.getUniformLocation(prog, "LightDirection");
     shProgram.iViewWorldPosition         = gl.getUniformLocation(prog, "ViewWorldPosition");
-
+    shProgram.iTexture                   = gl.getAttribLocation(prog, 'texture');
+    shProgram.iUText                     = gl.getUniformLocation(prog, 'uTexture');
+    shProgram.iAngle                     = gl.getUniformLocation(prog, 'Angle');
+    shProgram.iPoint                     = gl.getUniformLocation(prog, 'Point');
     surface = new Model('Surface');
-    let data = CreateSurfaceData();
-    console.log(data[0].length)
-    surface.BufferData(data[0], data[1]);
+    surface.BufferData(CreateSurfaceData());
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.src = 'https://www.the3rdsequence.com/texturedb/download/259/texture/jpg/256/burning+hot+lava-256x256.jpg';
+    image.onload = () => {
+      const texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);  
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+      draw();
+    };
 }
 
 
@@ -259,7 +291,7 @@ function init() {
 
 function GetCircleLightPoint()
 {
-    let radius = 10;
+    let radius = 15;
     angle = degriesToRadians(InputCounter);
     console.debug(angle);
     let x = radius * Math.cos(angle );
@@ -269,14 +301,32 @@ function GetCircleLightPoint()
 }
 
 window.addEventListener("keydown", function (event) {  
+    const step = 0.5
     switch (event.key) {
-      case "ArrowLeft":
+    case "ArrowLeft":
         ProcessArrowLeftDown();
         break;
-      case "ArrowRight":
+    case "ArrowRight":
         ProcessArrowRightDown();
         break;
-      default:
+    case 'w':
+        console.log('w');
+        point.y = point.y + step;
+        draw();
+        break;
+    case 's':
+        point.y = point.y - step;
+        draw();
+        break;
+     case 'd':
+        point.x = point.x + step;
+        draw();
+        break;
+    case 'a':
+        point.x = point.x - step;
+        draw();
+        break;
+    default:
         return; 
     }
 });

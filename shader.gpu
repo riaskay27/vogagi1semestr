@@ -2,20 +2,61 @@
 const vertexShaderSource = `
 attribute vec3 vertex;
 attribute vec3 normal;
+attribute vec2 texture;
+
 uniform mat4 ModelViewProjectionMatrix;
 uniform mat4 WorldInverseTranspose;
 uniform mat4 WorldMatrix;
 uniform vec3 LightWorldPosition;
 uniform vec3 ViewWorldPosition;
+uniform vec2 Point;
+uniform float Angle;
 varying vec3 v_normal;
 varying vec3 v_surfaceToLight;
 varying vec3 v_surfaceToView;
+varying vec2 v_texture;
+
+
+mat4 getRotate(float angleToRad) {
+  float c = cos(angleToRad);
+  float s = sin(angleToRad);
+
+  return mat4(
+    vec4(c, s, 0.0, 0.0),
+    vec4(-s, c, 0.0, 0.0),
+    vec4(0.0, 0.0, 1.0, 0.0),
+    vec4(0.0, 0.0, 0.0, 1.0)
+  );
+}
+
+mat4 getTranslate(vec2 t) {
+  return mat4(
+    1.0, 0.0, 0.0, t.x,
+    0.0, 1.0, 0.0, t.y,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, 0.0, 0.0, 1.0
+  );
+}
+
+vec2 getTexture(vec2 texture, float Angle, vec2 Point) {
+    mat4 rotateMat = getRotate(Angle);
+    mat4 translate = getTranslate(-Point);
+    mat4 translateBack = getTranslate(Point);
+
+    vec4 textCoordTr = translate * vec4(texture, 0, 0);
+    vec4 textCoordRotate = textCoordTr * rotateMat;
+    vec4 textCoordTrBack = textCoordRotate * translateBack;
+
+    return vec2(textCoordTrBack);
+}
+
 void main() {
     gl_Position = ModelViewProjectionMatrix * vec4(vertex,1.0);
     v_normal = mat3(WorldInverseTranspose) * normal;
     vec3 surfaceWorldPosition = (WorldMatrix * vec4(vertex, 1.0)).xyz;
     v_surfaceToLight = LightWorldPosition - surfaceWorldPosition;
     v_surfaceToView = ViewWorldPosition - surfaceWorldPosition;
+    v_texture = getTexture(texture, Angle, Point);
 }`;
 
 
@@ -29,9 +70,11 @@ const fragmentShaderSource = `
 uniform vec4 color;
 uniform vec3 LightDirection;
 uniform float limit;
+uniform sampler2D uTexture;
 varying vec3 v_normal;
 varying vec3 v_surfaceToLight;
 varying vec3 v_surfaceToView;
+varying vec2 v_texture;
 void main() {
     vec3 normal = normalize(v_normal);
     vec3 surfaceToLightDirection = normalize(v_surfaceToLight);
@@ -49,8 +92,8 @@ void main() {
         specular = pow(dot(normal, halfVector), shininess);
       }
     }
-    
-    gl_FragColor = color;
+    vec4 texture = texture2D(uTexture, v_texture);
+    gl_FragColor = texture * color;
     gl_FragColor.rgb *= light;
     gl_FragColor.rgb += specular;
 }`;

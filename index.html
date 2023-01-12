@@ -23,7 +23,10 @@
 <p id="message">Drag your mouse on the cube to rotate it.<br>
 (On a touch screen, you can use your finger.)</p>
 
-
+<div>
+    <label for="rotAngle">Angle of rotation:</label>
+    <input id="rotAngle" type="range" min="-180" max="180" step="2" onchange="draw()" />
+</div>
 <div id="canvas-holder">
    <canvas width="600" height="600" id="webglcanvas" style="background-color:red"></canvas>
 </div>
